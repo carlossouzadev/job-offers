@@ -118,14 +118,42 @@ To keep your job database automatically updated, you can configure a cron job to
 
 ## ⚙️ Customization
 
-### Keyword Filtering
-You can restrict the crawler to only ingest jobs matching specific keywords (e.g., specific tech stacks).
+## ⚙️ Dynamic Keyword Search & Filtering
 
-In `crawler.php`, edit the `$KEYWORD_FILTER` array:
-```php
-// Leave empty [] to accept all jobs, or specify keywords:
-$KEYWORD_FILTER = ['php', 'laravel', 'backend', 'typescript', 'react', 'python'];
-```
+The project supports dynamic keyword filtering both in the **CLI crawler** and in the **Web Dashboard**:
+
+### 1. In the CLI Crawler (`crawler.php`)
+You no longer need to edit source code to filter jobs. You can pass keywords dynamically in three ways:
+
+* **Via CLI arguments (flags or direct keywords):**
+  ```bash
+  # Using --keywords or -k flag
+  php crawler.php --keywords="php,laravel,react"
+  php crawler.php -k "python,fastapi,ai"
+
+  # Or using positional arguments directly
+  php crawler.php php laravel vue
+  ```
+
+* **Via `.env` file:**
+  ```env
+  KEYWORD_FILTER=php,laravel,backend,typescript,react
+  ```
+
+* **Via Environment Variable:**
+  ```bash
+  KEYWORD_FILTER="golang,kubernetes" php crawler.php
+  ```
+
+*Leaving keywords empty will crawl and save all jobs without filtering.*
+
+---
+
+### 2. In the Web Dashboard (`index.php`)
+The dashboard search bar now features smart multi-keyword queries:
+* **`OR` queries (Comma-separated):** Searching for `php, laravel, python` will find any job matching **at least one** of these technologies.
+* **`AND` queries (Space-separated):** Searching for `senior php remote` will match jobs that contain **all** of these terms.
+* **⚡ Quick Keyword Chips:** One-click quick filter buttons for popular tech stacks (`PHP`, `Laravel`, `Python`, `Node.js`, `React`, `TypeScript`, `Go`, `DevOps`, etc.).
 
 ### Adding New Sources
 To add another job board, create a new crawl function in `crawler.php` following the signature:
