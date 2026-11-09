@@ -1,0 +1,28 @@
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+*.log
+crawler_log.txt
+
+# Python virtual environment & local helper scripts
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+chat.py
+cron_instructions.txt
+
+# Editor & System files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.antigravity/
