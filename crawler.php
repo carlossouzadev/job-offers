@@ -3,15 +3,80 @@
 
 require_once __DIR__ . '/db.php';
 
+// ─────────────────────────────────────────────
+// Dynamic Keyword Filter Configuration
+// Keywords can be passed via:
+// 1. CLI options: php crawler.php --keywords="php,laravel" or -k "react,node"
+// 2. CLI positional args: php crawler.php php laravel backend
+// 3. Environment variable or .env: KEYWORD_FILTER=php,laravel,backend
+// ─────────────────────────────────────────────
+
+/**
+ * Load key-value pairs from .env if present.
+ */
+function loadDotEnv(string $path = __DIR__ . '/.env'): void
+{
+    if (!file_exists($path)) return;
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) continue;
+        if (str_contains($line, '=')) {
+            [$key, $val] = explode('=', $line, 2);
+            $key = trim($key);
+            $val = trim($val, " \t\n\r\0\x0B\"'");
+            if (getenv($key) === false && !isset($_ENV[$key])) {
+                putenv("$key=$val");
+                $_ENV[$key] = $val;
+            }
+        }
+    }
+}
+
+/**
+ * Dynamically resolve keyword filter.
+ */
+function resolveKeywordFilter(array $argv): array
+{
+    $keywords = [];
+
+    for ($i = 1; $i < count($argv); $i++) {
+        $arg = $argv[$i];
+        if (str_starts_with($arg, '--keywords=')) {
+            $raw = substr($arg, 11);
+            $parts = preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+            $keywords = array_merge($keywords, $parts);
+        } elseif (($arg === '--keywords' || $arg === '-k') && isset($argv[$i + 1])) {
+            $raw = $argv[++$i];
+            $parts = preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+            $keywords = array_merge($keywords, $parts);
+        } elseif (!str_starts_with($arg, '-')) {
+            $parts = preg_split('/[\s,]+/', $arg, -1, PREG_SPLIT_NO_EMPTY);
+            $keywords = array_merge($keywords, $parts);
+        }
+    }
+
+    if (empty($keywords)) {
+        loadDotEnv();
+        $envVal = getenv('KEYWORD_FILTER') ?: ($_ENV['KEYWORD_FILTER'] ?? getenv('KEYWORDS') ?: ($_ENV['KEYWORDS'] ?? ''));
+        if (!empty($envVal)) {
+            $parts = preg_split('/[\s,]+/', $envVal, -1, PREG_SPLIT_NO_EMPTY);
+            $keywords = array_merge($keywords, $parts);
+        }
+    }
+
+    return array_values(array_unique(array_filter(array_map(fn($k) => strtolower(trim($k)), $keywords))));
+}
+
+$KEYWORD_FILTER = resolveKeywordFilter($argv ?? []);
+
 $startTime = microtime(true);
 echo "[" . date('Y-m-d H:i:s') . "] Iniciando crawler de vagas (multi-source)...\n";
-
-// ─────────────────────────────────────────────
-// Optional keyword filter — leave empty to accept all jobs.
-// If set, only jobs whose title OR tags contain at least one keyword are kept.
-// Example: $KEYWORD_FILTER = ['php', 'laravel', 'backend', 'typescript', 'node'];
-// ─────────────────────────────────────────────
-$KEYWORD_FILTER = [];
+if (!empty($KEYWORD_FILTER)) {
+    echo "[" . date('Y-m-d H:i:s') . "] Filtro por palavra-chave ativo: [" . implode(', ', $KEYWORD_FILTER) . "]\n";
+} else {
+    echo "[" . date('Y-m-d H:i:s') . "] Filtro por palavra-chave: nenhum (todas as vagas serão aceitas)\n";
+}
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -64,12 +129,12 @@ function detectB2b(string $text): int
 }
 
 /**
- * Check if job passes optional keyword filter.
+ * Check if job passes dynamic keyword filter across title, tags, and description.
  */
-function passesKeywordFilter(string $title, array $tags, array $filter): bool
+function passesKeywordFilter(string $title, array $tags, string $description, array $filter): bool
 {
     if (empty($filter)) return true;
-    $haystack = strtolower($title . ' ' . implode(' ', $tags));
+    $haystack = strtolower($title . ' ' . implode(' ', $tags) . ' ' . strip_tags($description));
     foreach ($filter as $kw) {
         if (str_contains($haystack, strtolower($kw))) return true;
     }
@@ -145,7 +210,7 @@ function crawlRemotive(PDO $pdo, array $filter): array
         $title = $job['title'] ?? '';
         $tags  = $job['tags'] ?? [];
 
-        if (!passesKeywordFilter($title, $tags, $filter)) continue;
+        if (!passesKeywordFilter($title, $tags, $job['description'] ?? '', $filter)) continue;
 
         $postedAt = isset($job['publication_date'])
             ? date('Y-m-d H:i:s', strtotime($job['publication_date']))
@@ -187,7 +252,7 @@ function crawlJobicy(PDO $pdo, array $filter): array
     foreach ($data['jobs'] as $job) {
         $title = $job['jobTitle'] ?? '';
 
-        if (!passesKeywordFilter($title, [], $filter)) continue;
+        if (!passesKeywordFilter($title, [], $job['jobDescription'] ?? '', $filter)) continue;
 
         $isNew = insertJob(
             $pdo,
@@ -222,7 +287,7 @@ function crawlRemoteOK(PDO $pdo, array $filter): array
         $title = $job['position'] ?? '';
         $tags  = (array)($job['tags'] ?? []);
 
-        if (!passesKeywordFilter($title, $tags, $filter)) continue;
+        if (!passesKeywordFilter($title, $tags, $job['description'] ?? '', $filter)) continue;
 
         $postedAt = isset($job['epoch'])
             ? date('Y-m-d H:i:s', $job['epoch'])
@@ -274,7 +339,7 @@ function crawlArbeitnow(PDO $pdo, array $filter): array
         $title = $job['title'] ?? '';
         $tags  = (array)($job['tags'] ?? []);
 
-        if (!passesKeywordFilter($title, $tags, $filter)) continue;
+        if (!passesKeywordFilter($title, $tags, $job['description'] ?? '', $filter)) continue;
 
         $postedAt = isset($job['created_at'])
             ? date('Y-m-d H:i:s', $job['created_at'])
