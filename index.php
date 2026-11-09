@@ -15,8 +15,25 @@ $where  = ["datetime(posted_at) >= datetime('now', '-{$days} days')"];
 $params = [];
 
 if ($search !== '') {
-    $where[]          = "(title LIKE :search OR company LIKE :search OR description LIKE :search OR category LIKE :search)";
-    $params[':search'] = "%{$search}%";
+    // Dynamic multi-keyword support:
+    // Comma separates OR conditions ("php, python, node")
+    // Space separates AND conditions ("senior php remote")
+    $hasComma = str_contains($search, ',');
+    $terms = $hasComma
+        ? array_filter(array_map('trim', explode(',', $search)))
+        : preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY);
+
+    $termClauses = [];
+    foreach (array_values($terms) as $idx => $term) {
+        $pKey = ":kw_{$idx}";
+        $termClauses[] = "(title LIKE {$pKey} OR company LIKE {$pKey} OR description LIKE {$pKey} OR category LIKE {$pKey})";
+        $params[$pKey] = "%{$term}%";
+    }
+
+    if (!empty($termClauses)) {
+        $glue = $hasComma ? ' OR ' : ' AND ';
+        $where[] = '(' . implode($glue, $termClauses) . ')';
+    }
 }
 if ($filterSrc !== '') {
     $where[]        = "source = :source";
@@ -177,6 +194,24 @@ function formatSalary(?int $min, ?int $max): string {
             white-space: nowrap; text-decoration: none;
         }
         .btn-reset:hover { color: var(--text); }
+
+        /* ── Dynamic keyword quick bar ── */
+        .filters-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; width: 100%; }
+        .kw-quick-bar {
+            width: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+        }
+        .kw-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+        .kw-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .kw-chip {
+            display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
+            font-size: .72rem; font-weight: 500; color: var(--text); background: var(--surface2);
+            border: 1px solid var(--border); text-decoration: none; transition: all .15s ease;
+        }
+        .kw-chip:hover { border-color: var(--accent); color: #fff; background: rgba(99, 102, 241, 0.2); }
+        .kw-chip.active { background: var(--accent); border-color: var(--accent2); color: #fff; }
+        .kw-clear { font-size: .72rem; color: var(--muted); text-decoration: underline; margin-left: 6px; }
+        .kw-clear:hover { color: var(--red); }
 
         /* ── Results meta ── */
         .results-meta { font-size: .8rem; color: var(--muted); margin-bottom: 16px; }
