@@ -347,41 +347,64 @@ function formatSalary(?int $min, ?int $max): string {
 
     <!-- Filters -->
     <form method="GET" action="" class="filters" id="filterForm">
-        <div class="filter-group" style="flex:2; min-width:220px;">
-            <label for="q">🔍 Search</label>
-            <input type="text" id="q" name="q" placeholder="Title, company, skill…" value="<?= htmlspecialchars($search) ?>">
+        <div class="filters-row">
+            <div class="filter-group" style="flex:2; min-width:220px;">
+                <label for="q">🔍 Search by Keywords</label>
+                <input type="text" id="q" name="q" placeholder="e.g. php, laravel or react remote" value="<?= htmlspecialchars($search) ?>">
+            </div>
+            <div class="filter-group">
+                <label for="source">Source</label>
+                <select id="source" name="source">
+                    <option value="">All sources</option>
+                    <?php foreach ($sources as $src):
+                        $color = $sourceColors[$src['source']] ?? $sourceColors['unknown'];
+                    ?>
+                    <option value="<?= htmlspecialchars($src['source']) ?>" <?= $filterSrc === $src['source'] ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($color['label']) ?> (<?= $src['cnt'] ?>)
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="b2b">Contract</label>
+                <select id="b2b" name="b2b">
+                    <option value="">All types</option>
+                    <option value="1" <?= $filterB2b === '1' ? 'selected' : '' ?>>B2B / Contract only</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="days">Window</label>
+                <select id="days" name="days">
+                    <?php foreach ([7, 14, 30, 60, 90] as $d): ?>
+                    <option value="<?= $d ?>" <?= $days === $d ? 'selected' : '' ?>>Last <?= $d ?> days</option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <button type="submit" class="btn-filter">Search</button>
+            <a href="?" class="btn-reset">Reset</a>
         </div>
-        <div class="filter-group">
-            <label for="source">Source</label>
-            <select id="source" name="source">
-                <option value="">All sources</option>
-                <?php foreach ($sources as $src):
-                    $color = $sourceColors[$src['source']] ?? $sourceColors['unknown'];
+
+        <!-- Dynamic Quick Keywords -->
+        <div class="kw-quick-bar">
+            <span class="kw-label">⚡ Palavras-chave:</span>
+            <div class="kw-chips">
+                <?php
+                $quickKeywords = ['PHP', 'Laravel', 'Python', 'Node.js', 'React', 'TypeScript', 'Go', 'DevOps', 'Backend', 'Fullstack'];
+                foreach ($quickKeywords as $kw):
+                    $isActive = (stripos($search, $kw) !== false);
+                    $qParams = $_GET;
+                    $qParams['q'] = $kw;
+                    $chipHref = '?' . http_build_query($qParams);
                 ?>
-                <option value="<?= htmlspecialchars($src['source']) ?>" <?= $filterSrc === $src['source'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($color['label']) ?> (<?= $src['cnt'] ?>)
-                </option>
+                <a href="<?= htmlspecialchars($chipHref) ?>" class="kw-chip <?= $isActive ? 'active' : '' ?>">
+                    <?= htmlspecialchars($kw) ?>
+                </a>
                 <?php endforeach; ?>
-            </select>
+                <?php if ($search !== ''): ?>
+                <a href="?<?= http_build_query(array_diff_key($_GET, ['q' => ''])) ?>" class="kw-clear">✕ Limpar busca</a>
+                <?php endif; ?>
+            </div>
         </div>
-        <div class="filter-group">
-            <label for="b2b">Contract</label>
-            <select id="b2b" name="b2b">
-                <option value="">All types</option>
-                <option value="1" <?= $filterB2b === '1' ? 'selected' : '' ?>>B2B / Contract only</option>
-            </select>
-        </div>
-        <div class="filter-group">
-            <label for="days">Window</label>
-            <select id="days" name="days">
-                <?php foreach ([7, 14, 30, 60, 90] as $d): ?>
-                <option value="<?= $d ?>" <?= $days === $d ? 'selected' : '' ?>>Last <?= $d ?> days</option>
-                <?php endforeach; ?>
-            </select>
-        </div>
-        <input type="hidden" name="source" value="<?= htmlspecialchars($filterSrc) ?>" id="sourceHidden">
-        <button type="submit" class="btn-filter">Search</button>
-        <a href="?" class="btn-reset">Reset</a>
     </form>
 
     <!-- Results meta -->
